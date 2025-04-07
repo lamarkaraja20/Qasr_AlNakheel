@@ -23,11 +23,23 @@ export const createBooking = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    if (checkIn < today) {
+    const isBeforeToday = (
+        checkIn.getFullYear() < today.getFullYear() ||
+        (checkIn.getFullYear() === today.getFullYear() && checkIn.getMonth() < today.getMonth()) ||
+        (checkIn.getFullYear() === today.getFullYear() && checkIn.getMonth() === today.getMonth() && checkIn.getDate() < today.getDate())
+    );
+
+    if (isBeforeToday) {
         return res.status(400).json({ message: getMessage("earlierDateBook", lang) });
     }
 
-    const availableRooms = await Room.findAll({ where: { type } });
+    const availableRooms = await Room.findAll({
+        where: {
+            type,
+            isActive: true
+        }
+    });
+
     if (!availableRooms.length) {
         return res.status(404).json({ message: getMessage("roomTypeNotFound", lang) });
     }
@@ -43,7 +55,10 @@ export const createBooking = async (req, res) => {
                 [Op.or]: [
                     { check_in_date: { [Op.between]: [check_in_date, check_out_date] } },
                     { check_out_date: { [Op.between]: [check_in_date, check_out_date] } },
-                    { check_in_date: { [Op.lte]: check_in_date }, check_out_date: { [Op.gte]: check_out_date } },
+                    {
+                        check_in_date: { [Op.lte]: check_in_date },
+                        check_out_date: { [Op.gte]: check_out_date }
+                    },
                 ],
             },
         });
@@ -108,6 +123,7 @@ export const createBooking = async (req, res) => {
 
     return res.status(201).json({ message: getMessage("bookingDone", lang), booking: newBooking });
 };
+
 
 export const getAllBookings = async (req, res) => {
     try {
