@@ -8,7 +8,7 @@ const Customer = require("../../models/Customer.model");
 const router = express.Router();
 
 const callbackURL = process.env.NODE_ENV === "production"
-    ? "https://qasr-alnakheel.onrender.com/auth/facebook/callback"
+    ? "https://qasr-alnakheel-qmeb.onrender.com/auth/facebook/callback"
     : "http://localhost:3000/auth/facebook/callback";
 passport.use(new FacebookStrategy({
     clientID: process.env.FACEBOOK_CLIENT_ID,
