@@ -11,6 +11,10 @@ const Pool = sequelize.define('Pool', {
         type: DataTypes.JSON,
         allowNull: false,
     },
+    description: {
+        type: DataTypes.JSON,
+        allowNull: false,
+    },
     size: {
         type: DataTypes.STRING(200),
     },
@@ -36,7 +40,12 @@ const Pool = sequelize.define('Pool', {
     hourly_rate: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
-    }
+    },
+    is_deleted: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+      }
 }, {
     timestamps: false,
 });

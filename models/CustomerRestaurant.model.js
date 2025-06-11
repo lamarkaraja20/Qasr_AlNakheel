@@ -44,13 +44,17 @@ const CustomerRestaurant = sequelize.define("CustomerRestaurant", {
   },
   total_price: {
     type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
   },
   payed: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
     allowNull: false,
   },
+  is_deleted: {
+  type: DataTypes.BOOLEAN,
+  defaultValue: false,
+  allowNull: false,
+}
 }, {
   timestamps: false,
 });

@@ -28,6 +28,11 @@ const Restaurant = sequelize.define("Restaurant", {
   description: {
     type: DataTypes.JSON,
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 }, {
   timestamps: false,
 });

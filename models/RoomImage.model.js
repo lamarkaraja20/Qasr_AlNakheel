@@ -16,6 +16,11 @@ const RoomImage = sequelize.define("RoomImage", {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 }, {
   timestamps: false,
 });

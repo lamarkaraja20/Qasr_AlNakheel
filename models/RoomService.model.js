@@ -22,6 +22,11 @@ const RoomService = sequelize.define("RoomService", {
     type: DataTypes.UUID,
     allowNull: false,
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 }, { 
   timestamps: false,
   tableName: "RoomServices",

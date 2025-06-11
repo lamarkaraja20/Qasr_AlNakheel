@@ -18,6 +18,11 @@ const Service = sequelize.define("Service", {
   image: {
     type: DataTypes.STRING(255),
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 }, { 
   timestamps: false,
   tableName: "Services",

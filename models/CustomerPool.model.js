@@ -1,6 +1,7 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/dbConnection");
 const Pool = require("./Pool.model");
+const Customer = require("./Customer.model");
 
 const CustomerPool = sequelize.define("CustomerPool", {
     id: {
@@ -60,10 +61,18 @@ const CustomerPool = sequelize.define("CustomerPool", {
     notes: {
         type: DataTypes.TEXT,
         allowNull: true,
+    },
+    is_deleted: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
     }
 }, { timestamps: false });
 
 Pool.hasMany(CustomerPool, { foreignKey: "pool_id" });
 CustomerPool.belongsTo(Pool, { foreignKey: "pool_id" });
+
+Customer.hasMany(CustomerPool, { foreignKey: "customer_id" });
+CustomerPool.belongsTo(Customer, { foreignKey: "customer_id" });
 
 module.exports = CustomerPool;

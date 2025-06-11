@@ -10,9 +10,11 @@ const Employee = sequelize.define("Employee", {
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true,
   },
-  name: {
+  first_name: {
     type: DataTypes.STRING(100),
-    allowNull: false,
+  },
+  last_name:{
+    type: DataTypes.STRING(100),
   },
   email: {
     type: DataTypes.STRING(255),
@@ -34,6 +36,7 @@ const Employee = sequelize.define("Employee", {
   },
   hire_date: {
     type: DataTypes.DATEONLY,
+    defaultValue: DataTypes.NOW
   },
   salary: {
     type: DataTypes.DECIMAL(10, 2),
@@ -50,7 +53,8 @@ const Employee = sequelize.define("Employee", {
     defaultValue: "Active",
   },
   role: {
-    type: DataTypes.ENUM("admin", "employee","reception"),
+    type: DataTypes.ENUM("admin", "employee", "reception"),
+    defaultValue:"employee",
     allowNull: false,
   },
   hall_id: {
@@ -65,6 +69,11 @@ const Employee = sequelize.define("Employee", {
     type: DataTypes.UUID,
     onDelete: "SET NULL",
   },
+  is_deleted: {
+  type: DataTypes.BOOLEAN,
+  defaultValue: false,
+  allowNull: false,
+}
 }, {
   timestamps: false,
 });

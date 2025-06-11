@@ -42,6 +42,11 @@ const Payment = sequelize.define("Payment", {
   invoice_type: { 
     type: DataTypes.ENUM("Booking", "CustomerPool", "CustomerRestaurant", "HallReservation"),
     allowNull: false,
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
   }
 }, { timestamps: false });
 

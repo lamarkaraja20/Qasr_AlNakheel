@@ -17,6 +17,11 @@ const EmployeeMobile = sequelize.define("EmployeeMobile", {
     allowNull: false,
     unique: true,
   },
+  is_deleted: {
+  type: DataTypes.BOOLEAN,
+  defaultValue: false,
+  allowNull: false,
+}
 }, {
   timestamps: false,
 });

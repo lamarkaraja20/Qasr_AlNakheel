@@ -19,6 +19,11 @@ const RoomPricing = sequelize.define("RoomPricing", {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 });
 
 Room.hasMany(RoomPricing, { foreignKey: "room_id", onDelete: "CASCADE" });

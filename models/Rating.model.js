@@ -2,6 +2,9 @@ const { DataTypes } = require("sequelize");
 const sequelize = require("../config/dbConnection");
 const Room = require("./Room.model");
 const Customer = require("./Customer.model");
+const Hall = require("./Hall.model");
+const Pool = require("./Pool.model");
+const Restaurant = require("./Restaurant.model");
 
 const Rating = sequelize.define("Rating", {
   id: {
@@ -25,7 +28,7 @@ const Rating = sequelize.define("Rating", {
     },
     onDelete: "CASCADE",
   },
-  hall_id:{
+  hall_id: {
     type: DataTypes.UUID,
     references: {
       model: "Halls",
@@ -33,7 +36,7 @@ const Rating = sequelize.define("Rating", {
     },
     onDelete: "CASCADE",
   },
-  rest_id:{
+  rest_id: {
     type: DataTypes.UUID,
     references: {
       model: "Restaurants",
@@ -62,11 +65,26 @@ const Rating = sequelize.define("Rating", {
     type: DataTypes.TEXT,
     allowNull: true,
   },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
 }, { timestamps: true });
 
 Room.hasMany(Rating, { foreignKey: "room_id" });
 Customer.hasMany(Rating, { foreignKey: "customer_id" });
+
 Rating.belongsTo(Room, { foreignKey: "room_id" });
 Rating.belongsTo(Customer, { foreignKey: "customer_id" });
+
+Hall.hasMany(Rating, { foreignKey: "hall_id" });
+Rating.belongsTo(Hall, { foreignKey: "hall_id" });
+
+Pool.hasMany(Rating, { foreignKey: "pool_id" });
+Rating.belongsTo(Pool, { foreignKey: "pool_id" });
+
+Restaurant.hasMany(Rating, { foreignKey: "rest_id" });
+Rating.belongsTo(Restaurant, { foreignKey: "rest_id" });
 
 module.exports = Rating;

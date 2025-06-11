@@ -28,12 +28,13 @@ const Booking = sequelize.define("Booking", {
     allowNull: false,
   },
   status: {
-    type: DataTypes.STRING,
+    type: DataTypes.ENUM("confirmed", "canceled", "pending"),
+    defaultValue: "confirmed"
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
     allowNull: false,
-    validate: {
-      isIn: [["confirmed", "canceled", "pending"]],
-    },
-    defaultValue:"confirmed"
   },
 }, { timestamps: false });
 

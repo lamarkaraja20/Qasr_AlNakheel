@@ -28,6 +28,11 @@ const Contact = sequelize.define('Contact', {
     type: DataTypes.DATEONLY,
     defaultValue: DataTypes.NOW,
     allowNull: false
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
   }
 }, {
   timestamps: false,

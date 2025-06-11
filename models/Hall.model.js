@@ -18,11 +18,12 @@ const Hall = sequelize.define("Hall", {
     allowNull: false,
   },
   capacity: {
-    type: DataTypes.INTEGER,
+    type: DataTypes.JSON,
     allowNull: false,
-    validate: {
-      min: 1,
-    },
+  },
+  type: {
+    type: DataTypes.ENUM("meeting", "party"),
+    allowNull: false,
   },
   price_per_hour: {
     type: DataTypes.DECIMAL(10, 2),
@@ -31,7 +32,21 @@ const Hall = sequelize.define("Hall", {
   description: {
     type: DataTypes.JSON,
   },
-}, { 
+  length: {
+    type: DataTypes.INTEGER,
+  },
+  width: {
+    type: DataTypes.INTEGER,
+  },
+  suitable_for: {
+    type: DataTypes.JSON,
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
+}, {
   timestamps: false,
 });
 

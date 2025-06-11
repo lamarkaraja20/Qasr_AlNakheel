@@ -11,9 +11,29 @@ const Customer = sequelize.define("Customer", {
     type: DataTypes.STRING(50),
     allowNull: false,
   },
+  second_name: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
+  third_name: {
+    type: DataTypes.STRING(50),
+    allowNull: true,
+  },
   last_name: {
     type: DataTypes.STRING(50),
     allowNull: false,
+  },
+  gender: {
+    type: DataTypes.ENUM("male", "female"),
+    allowNull: true,
+  },
+  profession: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
+  free_text: {
+    type: DataTypes.TEXT,
+    allowNull: true,
   },
   country: {
     type: DataTypes.STRING(50),
@@ -56,13 +76,22 @@ const Customer = sequelize.define("Customer", {
   profile_picture: {
     type: DataTypes.STRING(255),
   },
+  banned: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
   is_verified: {
     type: DataTypes.BOOLEAN,
     defaultValue: false,
   },
-  createdAt:{
+  createdAt: {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW,
+  },
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
   }
 }, { timestamps: false });
 

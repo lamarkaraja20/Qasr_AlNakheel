@@ -26,6 +26,11 @@ const RestaurantImages = sequelize.define("RestaurantImages", {
         type: DataTypes.BOOLEAN,
         defaultValue: false,
     },
+    is_deleted: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        allowNull: false,
+      }
 }, {
     timestamps: false,
 });

@@ -9,7 +9,7 @@ const SpecialPricing = sequelize.define("SpecialPricing", {
     allowNull: false,
     primaryKey: true,
   },
-  room_id:{
+  room_id: {
     type: DataTypes.UUID,
     references: {
       model: Room,
@@ -46,7 +46,12 @@ const SpecialPricing = sequelize.define("SpecialPricing", {
     type: DataTypes.DECIMAL(10, 2),
     allowNull: false,
   },
-}, { 
+  is_deleted: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    allowNull: false,
+  }
+}, {
   timestamps: false,
 });
 
