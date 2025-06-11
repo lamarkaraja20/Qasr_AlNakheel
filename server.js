@@ -30,9 +30,16 @@ const app = express();
 app.use(cookieParser());
 const PORT = process.env.PORT || 3000;
 
+const whitelist = [process.env.FRONTEND_URL];
 
 const corsSettings = {
-  origin: process.env.FRONTEND_URL || `http://localhost:5173`,
+  origin: function (origin, callback) {
+    if (!origin || whitelist.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: "GET,PUT,POST,DELETE,PATCH",
   credentials: true,
   optionsSuccessStatus: 204,
