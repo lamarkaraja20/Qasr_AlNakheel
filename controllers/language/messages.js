@@ -90,7 +90,7 @@ const messages = {
         missingImage: "Missing image",
         cannotDeleteMainImage: "Cannot delete main image",
         addedReservation: "Added reservation successfully",
-        invalidStartTime: "Invalid start time",
+        invalidStartTime: "Invalid start time or date is in the past",
         reservationNotFound: "Reservation not found",
         cannotCancelLate: "Can not cancel late",
         canceledReservation: "Reservation canceled",
@@ -128,6 +128,16 @@ const messages = {
         noPaymentsFound: "No payments were found",
         mobileExists: "Mobile number is already exists",
         noPasswordSet: "Your account was created using Google or Facebook. Please use the same provider to log in or reset your password.",
+        roomInactive: "Room inactive now",
+        priceNotFound: "Room price not found",
+        profileUpdated: "Your profile updated successfully",
+        customerDeleted: "Customer Account deleted",
+        noReservationsFound: "Can't find Reservations",
+        userBanned: "User has been banned.",
+        userUnbanned: "User has been unbanned.",
+        userDeleted:"This user is deleted.",
+        bannedUser:"User has been banned.",
+        employeeDeleted:"This employee account is deleted"
     },
     ar: {
         emailExists: "البريد الإلكتروني موجود بالفعل",
@@ -179,6 +189,7 @@ const messages = {
         invalidDates: "خطأ في التاريخ",
         specialPriceExists: "هناك سعر خاص مسبق في هذا التاريخ",
         specialPriceNotFound: "لا يوجد عروض خاصة",
+        priceNotFound: "لم نجد اسعار الغرفة",
         bookingDone: "تم حجز الغرفة بنجاح",
         fixedPriceNotFound: "لا يوجد سعر محدد ليوم ",
         roomPriceNotFound: "لم يتم العثور على أسعار للغرفة",
@@ -220,7 +231,7 @@ const messages = {
         missingImage: "لم يتم العثور على الصورة",
         cannotDeleteMainImage: "لا يمكن حذف الصورة الاساسية",
         addedReservation: "تم انشاء الحجز بنجاح",
-        invalidStartTime: "وقت الحجز ليس صالح",
+        invalidStartTime: "الوقت غير صالح أو أن التاريخ قد مضى",
         reservationNotFound: "لم يتم العثور على الحجز",
         cannotCancelLate: "لا يمكن الالغاء متأخراً",
         canceledReservation: "تم الغاء الحجز",
@@ -257,7 +268,16 @@ const messages = {
         invalidServiceType: "نوع الفاتورة غير صالح!",
         noPaymentsFound: "لم يتم العثور على أي مدفوعات",
         mobileExists: "رقم الهاتف المسجل موجود بالفعل",
-        noPasswordSet: "تم إنشاء حسابك باستخدام Google أو Facebook. يرجى استخدام نفس المزود لتسجيل الدخول أو إعادة تعيين كلمة المرور."
+        noPasswordSet: "تم إنشاء حسابك باستخدام Google أو Facebook. يرجى استخدام نفس المزود لتسجيل الدخول أو إعادة تعيين كلمة المرور.",
+        roomInactive: "الغرفة غير متاحة حاليا",
+        profileUpdated: "تم تحديث بيانات حسابك",
+        customerDeleted: "تم حذف حساب زبون",
+        noReservationsFound: "لم يعثر على حجوزات",
+        userBanned: "تم حظر المستخدم.",
+        userUnbanned: "تم إلغاء حظر المستخدم.",
+        userDeleted: "هذا المستخدم محذوف.",
+        bannedUser: "تم حظر المستخدم.",
+        employeeDeleted:"حساب هذا الموظف محذوف"
     }
 };
 

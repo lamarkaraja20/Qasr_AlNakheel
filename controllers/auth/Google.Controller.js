@@ -10,7 +10,7 @@ const router = express.Router();
 const callbackURL = process.env.NODE_ENV === "production"
     ? "https://qasr-alnakheel.onrender.com/auth/google/callback"
     : "http://localhost:3000/auth/google/callback";
-    
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -62,24 +62,17 @@ passport.deserializeUser(async (id, done) => {
     }
 });
 
-/*
-Call this API "/google/callback"  
-The request will be handled by the `passport` configuration above,  
-where the user's profile data will be retrieved from Google and returned with the user data.  
-
-In the `callback` API, the system will check if the user exists in the database:  
-- If the user exists, a new `accessToken` will be generated.  
-- The `accessToken` will be sent to the browser via cookies, and the user will be redirected to the homepage on the frontend.
-
-*/
 
 router.get("/google/callback", passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login` }), async (req, res) => {
     if (!req.user) {
         return res.redirect(`${process.env.FRONTEND_URL}/login` || "http://localhost:5173/login");
     }
+    if(req.user.is_deleted){
+        return res.redirect(`${process.env.FRONTEND_URL}/login` || "http://localhost:5173/login");
+    }
 
     const accessToken = jwt.sign(
-        { id: req.user.id, role: "user", is_verified: req.user.is_verified },
+        { id: req.user.id, role: "user", banned: req.user.banned, is_verified: req.user.is_verified },
         process.env.JWT_ACCESS_SECRET,
         { expiresIn: "7d" }
     );
@@ -93,14 +86,5 @@ router.get("/google/callback", passport.authenticate("google", { failureRedirect
 
     res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
 });
-/*
-router.get("/google/logout", (req, res) => {
-    res.clearCookie("QasrAlNakheel");
-    req.logout(() => {
-        req.session.destroy(() => {
-            res.redirect(process.env.FRONTEND_URL || "http://localhost:5173");
-        });
-    });
-});
-*/
+
 module.exports = router;

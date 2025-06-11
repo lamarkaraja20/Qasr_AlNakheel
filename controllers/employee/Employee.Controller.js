@@ -15,14 +15,40 @@ const getLanguage = (req) => (req.headers["accept-language"] === "ar" ? "ar" : "
 
 export const addEmployee = async (req, res) => {
     const lang = getLanguage(req);
-    const { name, email, address, jop_description, hire_date, salary, shift, status, role, hall_id, rest_id, pool_id, mobileNo } = req.body;
+    const {
+        first_name, last_name, email, address,
+        jop_description, salary, shift, status,
+        role, hall_id, rest_id, pool_id, mobileNo
+    } = req.body;
 
     const employee = await Employee.findOne({ where: { email } });
     if (employee) return res.status(400).json({ message: getMessage("emailExists", lang) });
 
+    if (Array.isArray(mobileNo) && mobileNo.length > 0) {
+        const existingMobiles = await EmployeeMobile.findAll({
+            where: { mobile_no: mobileNo }
+        });
+
+        if (existingMobiles.length > 0) {
+            const duplicateNumbers = existingMobiles.map(m => m.mobile_no);
+            return res.status(400).json({
+                message: getMessage("mobileExists", lang),
+                duplicateNumbers
+            });
+        }
+    }
+
+    if (!req.body.password) {
+        return res.status(400).json({ message: getMessage("passwordRequired", lang) });
+    }
+
     const password = await bcrypt.hash(req.body.password, 10);
 
-    const newEmployee = await Employee.create({ name, email, password, address, jop_description, hire_date, salary, shift, status, role, hall_id, rest_id, pool_id, mobileNo });
+    const newEmployee = await Employee.create({
+        first_name, last_name, email, password, address,
+        jop_description, salary, shift, status,
+        role, hall_id, rest_id, pool_id
+    });
 
     if (Array.isArray(mobileNo) && mobileNo.length > 0) {
         const mobileRecords = mobileNo.map(number => ({
@@ -34,19 +60,20 @@ export const addEmployee = async (req, res) => {
     }
 
     res.status(201).json({ message: getMessage("employeeAdded", lang), newEmployee });
-}
+};
 
 
 
 export const getAllEmployees = async (req, res) => {
     const employees = await Employee.findAll({
-        attributes: ['id', 'name', 'email', 'address', 'jop_description', 'hire_date', 'salary', 'shift', 'status', 'role', 'hall_id', 'rest_id', 'pool_id'],
+        where: { is_deleted: false },
+        attributes: ['id', 'first_name', 'last_name', 'email', 'address', 'jop_description', 'hire_date', 'salary', 'shift', 'status', 'role', 'hall_id', 'rest_id', 'pool_id'],
         include: {
             model: EmployeeMobile,
             attributes: ['mobile_no'],
         },
     });
-    res.status(200).json(employees);
+    res.status(200).json({ employees: employees });
 }
 
 
@@ -56,8 +83,8 @@ export const getEmployeeById = async (req, res) => {
     const employee_id = req.params.id;
 
     const employee = await Employee.findOne({
-        where: { id: employee_id },
-        attributes: ['id', 'name', 'email', 'address', 'jop_description', 'hire_date', 'salary', 'shift', 'status', 'role', 'hall_id', 'rest_id', 'pool_id'],
+        where: { id: employee_id, is_deleted: false },
+        attributes: ['id', 'first_name', 'last_name', 'email', 'address', 'jop_description', 'hire_date', 'salary', 'shift', 'status', 'role', 'hall_id', 'rest_id', 'pool_id'],
         include: [
             {
                 model: EmployeeMobile,
@@ -97,6 +124,7 @@ export const getEmployeeFilter = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const filter = {};
+    filter.is_deleted = false;
 
     if (address) filter.address = { [Op.like]: `%${address}%` };
     if (jop) filter.jop_description = { [Op.like]: `%${jop}%` };
@@ -112,7 +140,7 @@ export const getEmployeeFilter = async (req, res) => {
     const employees = await Employee.findAll({
         where: filter,
         attributes: [
-            'id', 'name', 'email', 'address', 'jop_description', 'hire_date',
+            'id', 'first_name', 'last_name', 'email', 'address', 'jop_description', 'hire_date',
             'salary', 'shift', 'status', 'role', 'hall_id', 'rest_id', 'pool_id'
         ],
         include: [
@@ -173,7 +201,7 @@ export const changePassword = async (req, res) => {
 export const updateEmployee = async (req, res) => {
     const lang = getLanguage(req);
     const employee_id = req.params.id;
-    const { name, email, address, salary, hire_date, mobileNo } = req.body;
+    const { first_name, last_name, email, address, salary,  mobileNo } = req.body;
 
     const transaction = await Employee.sequelize.transaction();
 
@@ -191,11 +219,11 @@ export const updateEmployee = async (req, res) => {
 
     await employee.update(
         {
-            name: name ?? employee.name,
+            first_name: first_name ?? employee.first_name,
+            last_name: last_name ?? employee.last_name,
             email: email ?? employee.email,
             address: address ?? employee.address,
             salary: salary ?? employee.salary,
-            hire_date: hire_date ?? employee.hire_date,
         },
         { transaction }
     );
@@ -297,7 +325,8 @@ export const deleteEmployee = async (req, res) => {
         return res.status(404).json({ message: getMessage("employeeNotFound", lang) });
     }
 
-    await Employee.destroy({ where: { id: employee_id } });
+    employee.is_deleted = true;
+    await employee.save();
 
     res.status(200).json({ message: getMessage("employeeDeleted", lang) });
 }

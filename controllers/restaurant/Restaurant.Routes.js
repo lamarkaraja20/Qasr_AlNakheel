@@ -4,29 +4,33 @@ const router = express.Router();
 const multer = require("multer");
 const { createRestaurant, getRestaurants, getRestaurantById, updateRestaurant, addRestaurantImage, updateMainImage, deleteRestaurantImage, deleteRestaurant } = require('./Restaurant.Controller');
 const { uploadRestaurantImages, uploadMoreRestaurantImage } = require('../../config/multerConfig');
-const { createRestaurantReservation, getReservationsByRestaurant, getReservationsByDate, deleteReservation, getFutureReservations, acceptRestaurantReservation } = require('./RestaurantReservation.Controller');
+const { createRestaurantReservation, getReservationsByRestaurant, getReservationsByDate, deleteReservation, getFutureReservations, acceptRestaurantReservation, getRestaurantReservationsByCustomer, cancelRestaurantReservation, getAllRestaurantReservations } = require('./RestaurantReservation.Controller');
+const { verifyTokenAdmin, verifyTokenAdminOrReceptionist, verifyTokenUserVerified, verifyAnyoneHasAccount } = require('../../middleware/verifyToken');
 const upload = multer();
 
-router.post('/', uploadRestaurantImages, createRestaurant);
-router.post('/addRestaurantImage/:id', uploadMoreRestaurantImage, addRestaurantImage)
+router.post('/', verifyTokenAdmin, uploadRestaurantImages, createRestaurant);
+router.post('/addRestaurantImage/:id', verifyTokenAdmin, uploadMoreRestaurantImage, addRestaurantImage)
 
 
 //RestaurantReservation
-router.post("/createRestaurantReservation/:id", createRestaurantReservation);
-router.get("/reservationsByRestaurant/:id", getReservationsByRestaurant);
-router.get("/reservations/date/:date", getReservationsByDate);
-router.get("/reservations/future", getFutureReservations);
-router.patch("/acceptReservation/:id", acceptRestaurantReservation);
-router.delete("/reservation/:id", deleteReservation);
+router.post("/createRestaurantReservation/:id", verifyTokenUserVerified, createRestaurantReservation);
+router.get("/get/allReservationWithFilter", verifyTokenAdminOrReceptionist, getAllRestaurantReservations)
+router.get("/reservationsByRestaurant/:id", verifyTokenAdminOrReceptionist, getReservationsByRestaurant);
+router.get("/get/ReservationsCustomer/:id", verifyAnyoneHasAccount, getRestaurantReservationsByCustomer)
+router.get("/reservations/date/:date", verifyTokenAdminOrReceptionist, getReservationsByDate);
+router.get("/reservations/future", verifyTokenAdminOrReceptionist, getFutureReservations);
+router.patch("/acceptReservation/:id", verifyTokenAdminOrReceptionist, acceptRestaurantReservation);
+router.patch("/cancelRestaurantReservation/:id", verifyAnyoneHasAccount, cancelRestaurantReservation)
+router.delete("/reservation/:id", verifyAnyoneHasAccount, deleteReservation);
 //
 
 router.get('/', getRestaurants)
 router.get('/:id', getRestaurantById)
 
-router.put('/:id', upload.none(), updateRestaurant)
-router.patch('/updateMainImage/:id', uploadMoreRestaurantImage, updateMainImage)
+router.put('/:id', verifyTokenAdmin, upload.none(), updateRestaurant)
+router.patch('/updateMainImage/:id', verifyTokenAdmin, uploadMoreRestaurantImage, updateMainImage)
 
-router.delete('/deleteRestaurantImage/:id', deleteRestaurantImage)
-router.delete('/:id', deleteRestaurant)
+router.delete('/deleteRestaurantImage/:id', verifyTokenAdmin, deleteRestaurantImage)
+router.delete('/:id', verifyTokenAdmin, deleteRestaurant)
 
 module.exports = router;

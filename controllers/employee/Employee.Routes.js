@@ -9,20 +9,20 @@ const { verifyTokenAdmin } = require('../../middleware/verifyToken');
 const upload = multer();
 
 
-router.post('/', upload.none(), addEmployee);
+router.post('/', upload.none(), verifyTokenAdmin, addEmployee);
 router.post('/login', logIn)
 
-router.get('/', getAllEmployees);
-router.get('/getById/:id', getEmployeeById);
-router.get('/filters/:page/:limit', getEmployeeFilter)
+router.get('/', verifyTokenAdmin, getAllEmployees);
+router.get('/getById/:id', verifyTokenAdmin, getEmployeeById);
+router.get('/filters/:page/:limit', verifyTokenAdmin, getEmployeeFilter)
 
-router.put('/:id', updateEmployee);
-router.patch('/shift/:id', changeEmployeeShift);
-router.patch('status/:id', changeEmployeeStatus);
-router.patch('/jop/:id', changeEmployeeJop);
-router.patch('/changePassword/:id', changePassword);
+router.put('/:id', verifyTokenAdmin, updateEmployee);
+router.patch('/shift/:id', verifyTokenAdmin, changeEmployeeShift);
+router.patch('/status/:id', verifyTokenAdmin, changeEmployeeStatus);
+router.patch('/jop/:id', verifyTokenAdmin, changeEmployeeJop);
+router.patch('/changePassword/:id', verifyTokenAdmin, changePassword);
 
-router.delete('/:id', deleteEmployee);
+router.delete('/:id', verifyTokenAdmin, deleteEmployee);
 
 module.exports = router;
 

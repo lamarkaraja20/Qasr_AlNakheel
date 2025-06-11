@@ -1,37 +1,38 @@
+
+
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('cloudinary').v2;
 
-const ensureDirExists = (dir) => {
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-};
+// إعداد بيانات Cloudinary - يفضل استخدام .env
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
-const createMulterUpload = (uploadDir, limits, fields = null) => {
-    const storage = multer.diskStorage({
-        destination: (req, file, cb) => {
-            const uploadPath = path.join(__dirname, `../uploads/${uploadDir}`);
-            ensureDirExists(uploadPath);
-            cb(null, uploadPath);
-        },
-        filename: (req, file, cb) => {
-            const ext = path.extname(file.originalname).toLowerCase();
-            const name = path.parse(file.originalname).name.replace(/\s+/g, '-'); // إزالة المسافات من الاسم الأصلي
-            const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}-${name}${ext}`;
-            cb(null, uniqueName);
-        },
+// دالة لإنشاء Multer باستخدام Cloudinary
+const createCloudinaryUpload = (folder, fields = null, limits = { fileSize: 15 * 1024 * 1024 }) => {
+    const storage = new CloudinaryStorage({
+        cloudinary: cloudinary,
+        params: async (req, file) => {
+            return {
+                folder,
+                format: file.mimetype.split('/')[1], // jpg, png, etc.
+                public_id: `${Date.now()}-${file.originalname.split('.')[0].replace(/\s+/g, '-')}`
+            };
+        }
     });
 
     const fileFilter = (req, file, cb) => {
         const allowedFileTypes = /jpeg|jpg|png/;
         const mimetype = allowedFileTypes.test(file.mimetype);
-        const extname = allowedFileTypes.test(path.extname(file.originalname).toLowerCase());
+        const extname = allowedFileTypes.test(file.originalname.toLowerCase());
 
         if (mimetype && extname) {
             return cb(null, true);
         }
-        cb(new Error(`File upload only supports JPEG, JPG, PNG`));
+        cb(new Error('Only JPEG, JPG, PNG files are allowed'));
     };
 
     return fields ?
@@ -39,38 +40,38 @@ const createMulterUpload = (uploadDir, limits, fields = null) => {
         multer({ storage, limits, fileFilter }).single('image');
 };
 
-const uploadprofilePicturesImage = createMulterUpload('profilePictures', { fileSize: 15 * 1024 * 1024 });
+// استخدامات متعددة حسب نوع الصور
+const uploadprofilePicturesImage = createCloudinaryUpload('profilePictures');
 
-const uploadRoomImages = createMulterUpload('roomImages', { fileSize: 15 * 1024 * 1024 }, [
+const uploadRoomImages = createCloudinaryUpload('roomImages', [
     { name: 'mainImage', maxCount: 1 },
     { name: 'additionalImages', maxCount: 10 }
 ]);
 
-const uploadSingleRoomImage = createMulterUpload('roomImages', { fileSize: 15 * 1024 * 1024 });
+const uploadSingleRoomImage = createCloudinaryUpload('roomImages');
 
-const uploadHallImages = createMulterUpload('hallImages', { fileSize: 15 * 1024 * 1024 }, [
+const uploadHallImages = createCloudinaryUpload('hallImages', [
     { name: 'mainImage', maxCount: 1 },
     { name: 'additionalImages', maxCount: 10 }
 ]);
-const addHallImage = createMulterUpload('hallImages', { fileSize: 15 * 1024 * 1024 });
+const addHallImage = createCloudinaryUpload('hallImages');
 
-const uploadPoolImages = createMulterUpload('PoolImages', { fileSize: 15 * 1024 * 1024 }, [
+const uploadPoolImages = createCloudinaryUpload('poolImages', [
     { name: 'mainImage', maxCount: 1 },
     { name: 'additionalImages', maxCount: 10 }
 ]);
-const uploadMorePoolImage = createMulterUpload('PoolImages', { fileSize: 15 * 1024 * 1024 });
+const uploadMorePoolImage = createCloudinaryUpload('poolImages');
 
-const uploadRestaurantImages = createMulterUpload('restaurantImages', { fileSize: 15 * 1024 * 1024 }, [
+const uploadRestaurantImages = createCloudinaryUpload('restaurantImages', [
     { name: 'mainImage', maxCount: 1 },
     { name: 'additionalImages', maxCount: 10 }
 ]);
-const uploadMoreRestaurantImage = createMulterUpload('restaurantImages', { fileSize: 15 * 1024 * 1024 });
+const uploadMoreRestaurantImage = createCloudinaryUpload('restaurantImages');
 
+const uploadServiceImage = createCloudinaryUpload('serviceImage');
 
-const uploadServiceImage = createMulterUpload('serviceImage', { fileSize: 15 * 1024 * 1024 });
-
-const uploadFacilityImages = createMulterUpload('facilitiesImages', { fileSize: 15 * 1024 * 1024 });
-const uploadFacilitiesImages = createMulterUpload('facilitiesImages', { fileSize: 15 * 1024 * 1024 }, [
+const uploadFacilityImages = createCloudinaryUpload('facilitiesImages');
+const uploadFacilitiesImages = createCloudinaryUpload('facilitiesImages', [
     { name: 'images', maxCount: 10 }
 ]);
 

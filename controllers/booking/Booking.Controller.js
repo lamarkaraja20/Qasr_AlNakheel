@@ -8,6 +8,9 @@ const RoomPricing = require("../../models/RoomPricing.model")
 const Room = require("../../models/Room.model")
 const SpecialPricing = require("../../models/SpecialPricing.model")
 const Customer = require("../../models/Customer.model")
+const RoomType = require("../../models/RoomType.model")
+
+const { sendBookingEmail } = require("../../utils/sendBookingEmail")
 
 const { getMessage } = require("../language/messages")
 const getLanguage = (req) => (req.headers["accept-language"] === "ar" ? "ar" : "en");
@@ -18,25 +21,29 @@ export const createBooking = async (req, res) => {
     const cust_id = req.params.id;
     const { type, num_of_guests, check_in_date, check_out_date, payment_status } = req.body;
 
+    const customer = await Customer.findByPk(cust_id);
+    const roomType = await RoomType.findByPk(type)
+
     const checkIn = new Date(check_in_date);
     const checkOut = new Date(check_out_date);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const isBeforeToday = (
-        checkIn.getFullYear() < today.getFullYear() ||
-        (checkIn.getFullYear() === today.getFullYear() && checkIn.getMonth() < today.getMonth()) ||
-        (checkIn.getFullYear() === today.getFullYear() && checkIn.getMonth() === today.getMonth() && checkIn.getDate() < today.getDate())
-    );
-
+    const isBeforeToday = checkIn < today;
     if (isBeforeToday) {
         return res.status(400).json({ message: getMessage("earlierDateBook", lang) });
+    }
+
+    // ✅ تحقق من أن check_out_date بعد check_in_date
+    if (checkOut <= checkIn) {
+        return res.status(400).json({ message: getMessage("invalidDateRange", lang) });
     }
 
     const availableRooms = await Room.findAll({
         where: {
             type,
-            isActive: true
+            isActive: true,
+            is_deleted: false,
         }
     });
 
@@ -52,6 +59,7 @@ export const createBooking = async (req, res) => {
             where: {
                 room_id: room.id,
                 status: "confirmed",
+                is_deleted: false,
                 [Op.or]: [
                     { check_in_date: { [Op.between]: [check_in_date, check_out_date] } },
                     { check_out_date: { [Op.between]: [check_in_date, check_out_date] } },
@@ -97,15 +105,19 @@ export const createBooking = async (req, res) => {
             return map;
         }, {});
 
+        const normalizedPricingMap = {};
+        for (const [key, value] of Object.entries(pricingMap)) {
+            normalizedPricingMap[key.toLowerCase()] = value;
+        }
         let currentDate = new Date(checkIn);
         while (currentDate < checkOut) {
-            const dayOfWeek = currentDate.toLocaleString("en-US", { weekday: "long" });
+            const dayOfWeek = currentDate.toLocaleString("en-US", { weekday: "long" }).toLowerCase();
 
-            if (!pricingMap[dayOfWeek]) {
+            if (!normalizedPricingMap[dayOfWeek]) {
                 return res.status(400).json({ message: getMessage("fixedPriceNotFound", lang) });
             }
 
-            total_price += pricingMap[dayOfWeek];
+            total_price += normalizedPricingMap[dayOfWeek];
             currentDate.setDate(currentDate.getDate() + 1);
         }
     }
@@ -121,48 +133,189 @@ export const createBooking = async (req, res) => {
         status: "confirmed",
     });
 
+    if (customer && customer.email) {
+        await sendBookingEmail(customer, {
+            roomType: roomType.name[lang]|| roomType.name.en,
+            num_of_guests,
+            check_in_date,
+            check_out_date,
+            total_price,
+        }, lang);
+    }
+
     return res.status(201).json({ message: getMessage("bookingDone", lang), booking: newBooking });
 };
 
+export const createBookingByRoomId = async (req, res) => {
+    const lang = getLanguage(req);
+    const cust_id = req.params.id;
+    const { room_id, num_of_guests, check_in_date, check_out_date, payment_status } = req.body;
 
-export const getAllBookings = async (req, res) => {
-    try {
-        const lang = getLanguage(req);
-        const { status } = req.query;
+    const customer = await Customer.findByPk(cust_id);
 
-        const limit = parseInt(req.query.limit) || 10;
-        const page = parseInt(req.query.page) || 1;
-        const offset = (page - 1) * limit;
+    const checkIn = new Date(check_in_date);
+    const checkOut = new Date(check_out_date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-        const whereCondition = {};
-        if (status) {
-            whereCondition.status = status;
-        }
+    const isBeforeToday = checkIn < today;
+    if (isBeforeToday) {
+        return res.status(400).json({ message: getMessage("earlierDateBook", lang) });
+    }
 
-        const bookings = await Booking.findAndCountAll({
-            where: whereCondition,
-            limit,
-            offset,
-            order: [["check_in_date", "DESC"]],
-            include: [
+    // ✅ تحقق من أن check_out_date بعد check_in_date
+    if (checkOut <= checkIn) {
+        return res.status(400).json({ message: getMessage("invalidDateRange", lang) });
+    }
+
+    const room = await Room.findByPk(room_id);
+    if (!room) {
+        return res.status(404).json({ message: getMessage("roomNotFound", lang) });
+    }
+    if (!room.isActive) {
+        return res.status(400).json({ message: getMessage("roomInactive", lang) });
+    }
+
+    if (num_of_guests > room.capacity) {
+        return res.status(400).json({ message: getMessage("exceedsCapacity", lang) });
+    }
+
+    const existingBooking = await Booking.findOne({
+        where: {
+            room_id: room.id,
+            status: "confirmed",
+            is_deleted: false,
+            [Op.or]: [
+                { check_in_date: { [Op.between]: [check_in_date, check_out_date] } },
+                { check_out_date: { [Op.between]: [check_in_date, check_out_date] } },
                 {
-                    model: Room,
-                },
-                {
-                    model: Customer,
-                    attributes: ["id", "first_name", "last_name", "email"],
+                    check_in_date: { [Op.lte]: check_in_date },
+                    check_out_date: { [Op.gte]: check_out_date }
                 },
             ],
-        });
+        },
+    });
 
-        if (!bookings.rows.length) {
-            return res.status(404).json({ message: getMessage("noBookingsFound", lang) });
+    if (existingBooking) {
+        return res.status(400).json({ message: getMessage("roomNotAvailable", lang) });
+    }
+
+    let total_price = 0;
+    const specialPricingList = await SpecialPricing.findAll({
+        where: {
+            room_id: room.id,
+            start_date: { [Op.lte]: check_out_date },
+            end_date: { [Op.gte]: check_in_date },
+        },
+    });
+
+    if (specialPricingList.length) {
+        let minSpecialPrice = Math.min(...specialPricingList.map(sp => parseFloat(sp.price)));
+        total_price = ((checkOut - checkIn) / (1000 * 60 * 60 * 24)) * minSpecialPrice;
+    } else {
+        const weeklyPricing = await RoomPricing.findAll({ where: { room_id: room.id } });
+
+        if (!weeklyPricing.length) {
+            return res.status(400).json({ message: getMessage("roomPriceNotFound", lang) });
         }
 
-        res.status(200).json(bookings);
-    } catch (error) {
-        res.status(500).json({ message: "Server error", error: error.message });
+        const pricingMap = weeklyPricing.reduce((map, price) => {
+            map[price.day_of_week] = parseFloat(price.price);
+            return map;
+        }, {});
+
+        const normalizedPricingMap = {};
+        for (const [key, value] of Object.entries(pricingMap)) {
+            normalizedPricingMap[key.toLowerCase()] = value;
+        }
+        let currentDate = new Date(checkIn);
+        while (currentDate < checkOut) {
+            const dayOfWeek = currentDate.toLocaleString("en-US", { weekday: "long" }).toLowerCase();
+
+            if (!normalizedPricingMap[dayOfWeek]) {
+                return res.status(400).json({ message: getMessage("fixedPriceNotFound", lang) });
+            }
+
+            total_price += normalizedPricingMap[dayOfWeek];
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
     }
+
+    const newBooking = await Booking.create({
+        cust_id,
+        room_id: room.id,
+        num_of_guests,
+        check_in_date,
+        check_out_date,
+        total_price,
+        payment_status,
+        status: "confirmed",
+    });
+
+    if (customer && customer.email) {
+        await sendBookingEmail(customer, {
+            roomType: room.type,
+            num_of_guests,
+            check_in_date,
+            check_out_date,
+            total_price,
+        }, lang);
+    }
+
+    return res.status(201).json({ message: getMessage("bookingDone", lang), booking: newBooking });
+};
+
+export const getAllBookings = async (req, res) => {
+    const lang = getLanguage(req);
+    const { status, payed, startDate, endDate } = req.query;
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const whereCondition = {};
+
+    whereCondition.is_deleted = false;
+    if (status) {
+        whereCondition.status = status;
+    }
+
+    if (payed !== undefined) {
+        whereCondition.payed = payed === "true";
+    }
+
+    if (startDate && endDate) {
+        whereCondition.check_in_date = {
+            [Op.between]: [new Date(startDate), new Date(endDate)],
+        };
+    } else if (startDate) {
+        whereCondition.check_in_date = {
+            [Op.gte]: new Date(startDate),
+        };
+    }
+
+    const bookings = await Booking.findAndCountAll({
+        where: whereCondition,
+        limit,
+        offset,
+        order: [["check_in_date", "DESC"]],
+        include: [
+            {
+                model: Room,
+                attributes: ["id", "room_no"]
+            },
+            {
+                model: Customer,
+                attributes: ["id", "first_name", "last_name", "email"],
+            },
+        ],
+    });
+
+    if (!bookings.rows.length) {
+        return res.status(404).json({ message: getMessage("noBookingsFound", lang) });
+    }
+
+    res.status(200).json(bookings);
 };
 
 
@@ -177,6 +330,7 @@ export const getBookingsByRoom = async (req, res) => {
     const offset = (page - 1) * limit;
 
     const whereCondition = { room_id };
+    whereCondition.is_deleted = false;
     if (status) {
         whereCondition.status = status;
     }
@@ -202,17 +356,35 @@ export const getBookingsByRoom = async (req, res) => {
 
 export const getBookingsByCustomer = async (req, res) => {
     const lang = getLanguage(req);
-
     const cust_id = req.params.id;
-    const { status } = req.query;
+    const { status, date, payed } = req.query;
 
     const limit = parseInt(req.query.limit) || 10;
     const page = parseInt(req.query.page) || 1;
     const offset = (page - 1) * limit;
 
-    const whereCondition = { cust_id };
+    const whereCondition = {
+        cust_id,
+        is_deleted: false,
+    };
     if (status) {
         whereCondition.status = status;
+    }
+    if (date) {
+        const startDate = new Date(date);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(date);
+        endDate.setHours(23, 59, 59, 999);
+
+        whereCondition.check_in_date = {
+            [Op.between]: [startDate, endDate]
+        };
+    }
+    if (payed === "true") {
+        whereCondition.payed = true;
+    } else if (payed === "false") {
+        whereCondition.payed = false;
     }
 
     const countBooking = await Booking.count({ where: whereCondition });
@@ -224,13 +396,15 @@ export const getBookingsByCustomer = async (req, res) => {
         order: [["check_in_date", "DESC"]],
         include: [{
             model: Room,
+            attributes: ["id", "room_no"]
         }]
     });
 
     if (!bookings.length) {
         return res.status(404).json({ message: getMessage("noBookingsFound", lang) });
     }
-    res.status(200).json({ countBooking: countBooking, bookings: bookings });
+
+    res.status(200).json({ countBooking, bookings });
 }
 
 export const canceledBooking = async (req, res) => {
@@ -246,14 +420,16 @@ export const canceledBooking = async (req, res) => {
         return res.status(400).json({ message: getMessage("bookingAlreadyCanceled", lang) });
     }
 
-    const [updatedRows, updatedBooking] = await Booking.update(
+    await Booking.update(
         { status: "canceled" },
-        { where: { id }, returning: true }
+        { where: { id } }
     );
+
+    const updatedBooking = await Booking.findByPk(id);
 
     res.status(200).json({
         message: getMessage("bookingCanceled", lang),
-        booking: updatedBooking[0]
+        booking: updatedBooking
     });
 }
 
@@ -265,6 +441,7 @@ export const deleteBooking = async (req, res) => {
     if (!booking) {
         return res.status(404).json({ message: getMessage("noBookingsFound", lang) });
     }
-    await booking.destroy();
-    res.status(204).json({ message: getMessage("deleteBooking", lang) });
+    booking.is_deleted = true;
+    await booking.save();
+    res.status(200).json({ message: getMessage("deleteBooking", lang) });
 }

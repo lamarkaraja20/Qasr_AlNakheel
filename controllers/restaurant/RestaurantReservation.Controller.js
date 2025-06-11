@@ -8,6 +8,7 @@ const Restaurant = require("../../models/Restaurant.model");
 const Customer = require("../../models/Customer.model");
 const RestaurantImages = require("../../models/RestaurantImages.model");
 const { getMessage } = require("../language/messages");
+const { sendRestaurantReservationEmail } = require("../../utils/sendRestaurantReservationEmail");
 
 const getLanguage = (req) => (req.headers["accept-language"] === "ar" ? "ar" : "en");
 
@@ -26,9 +27,10 @@ export const createRestaurantReservation = async (req, res) => {
     if (!restaurant) return res.status(404).json({ message: getMessage("restaurantsNotFound", lang) });
 
     const minTime = new Date(reservationDate);
-    minTime.setMinutes(minTime.getMinutes() - 15);
+    minTime.setHours(minTime.getHours() - 1);
+
     const maxTime = new Date(reservationDate);
-    maxTime.setMinutes(maxTime.getMinutes() + 15);
+    maxTime.setHours(maxTime.getHours() + 1);
 
     const existingReservations = await CustomerRestaurant.findAll({
         where: {
@@ -37,15 +39,7 @@ export const createRestaurantReservation = async (req, res) => {
             reservation_date: { [Op.between]: [minTime, maxTime] }
         }
     });
-    /*
-        const existingReservations = await CustomerRestaurant.findAll({
-            where: {
-                rest_id,
-                status: { [Op.in]: ["Pending", "Confirmed"] },
-                reservation_date: reservationDate
-            }
-        });
-    */
+
     const totalGuests = existingReservations.reduce((sum, res) => sum + res.number_of_guests, 0);
     if (totalGuests + number_of_guests > restaurant.capacity) {
         return res.status(400).json({ message: getMessage("restaurantFull", lang) });
@@ -57,8 +51,13 @@ export const createRestaurantReservation = async (req, res) => {
         reservation_date: reservationDate,
         number_of_guests,
         is_walk_in,
-        status: "Pending"
+        status: "Confirmed"
     });
+
+    const customer = await Customer.findByPk(customer_id);
+    if (customer) {
+        await sendRestaurantReservationEmail(customer, { ...reservation.dataValues, restaurant }, lang);
+    }
 
     res.status(201).json({ message: getMessage("addedReservation", lang), reservation });
 };
@@ -81,8 +80,64 @@ export const cancelRestaurantReservation = async (req, res) => {
 
 export const getReservationsByCustomerId = async (req, res) => {
     const cust_id = req.params.id;
-    const reservations = await CustomerRestaurant.findAll({ where: { cust_id } });
+    const reservations = await CustomerRestaurant.findAll({ where: { cust_id, is_deleted: false } });
     res.status(200).json(reservations);
+};
+
+export const getRestaurantReservationsByCustomer = async (req, res) => {
+    const lang = getLanguage(req);
+    const cust_id = req.params.id;
+    const { status, date, payed } = req.query;
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const whereCondition = {
+        cust_id,
+        is_deleted: false,
+    };
+
+    if (status) {
+        whereCondition.status = status;
+    }
+    if (date) {
+        const startDate = new Date(date);
+        startDate.setHours(0, 0, 0, 0);
+
+        const endDate = new Date(date);
+        endDate.setHours(23, 59, 59, 999);
+
+        whereCondition.reservation_date = {
+            [Op.between]: [startDate, endDate]
+        };
+    }
+    if (payed === "true") {
+        whereCondition.payed = true;
+    } else if (payed === "false") {
+        whereCondition.payed = false;
+    }
+
+    const count = await CustomerRestaurant.count({ where: whereCondition });
+
+    const reservations = await CustomerRestaurant.findAll({
+        where: whereCondition,
+        limit,
+        offset,
+        order: [["reservation_date", "DESC"]],
+        include: [
+            {
+                model: Restaurant,
+                attributes: ["id", "name", "Opening_hours"],
+            },
+        ],
+    });
+
+    if (!reservations.length) {
+        return res.status(404).json({ message: getMessage("noReservationsFound", lang) });
+    }
+
+    res.status(200).json({ count, reservations });
 };
 
 export const getReservationsByRestaurant = async (req, res) => {
@@ -90,7 +145,7 @@ export const getReservationsByRestaurant = async (req, res) => {
     const rest_id = req.params.id;
 
     const reservations = await CustomerRestaurant.findAll({
-        where: { rest_id },
+        where: { rest_id, is_deleted: false },
         include: [{ model: Customer, attributes: ["id", "first_name", "last_name"] }],
         order: [["reservation_date", "ASC"]],
     });
@@ -102,6 +157,7 @@ export const getReservationsByRestaurant = async (req, res) => {
 export const getReservationsByTime = async (req, res) => {
     const { date, after, before } = req.query;
     let whereClause = {};
+    whereClause.is_deleted = false;
 
     if (date) {
         whereClause.reservation_date = {
@@ -129,7 +185,7 @@ export const acceptRestaurantReservation = async (req, res) => {
 
     await reservation.update({ status: "Confirmed" });
 
-    res.status(200).json({ message: getMessage("reservationAccepted", lang),reservation });
+    res.status(200).json({ message: getMessage("reservationAccepted", lang), reservation });
 };
 
 export const deleteReservation = async (req, res) => {
@@ -141,7 +197,8 @@ export const deleteReservation = async (req, res) => {
         return res.status(404).json({ message: getMessage("reservationNotFound", lang) });
     }
 
-    await reservation.destroy();
+    reservation.is_deleted = true;
+    await reservation.save();
     res.status(200).json({ message: getMessage("reservationDeleted", lang) });
 };
 
@@ -149,6 +206,7 @@ export const getFutureReservations = async (req, res) => {
     const reservations = await CustomerRestaurant.findAll({
         where: {
             reservation_date: { [Op.gt]: new Date() },
+            is_deleted: false,
         },
     });
 
@@ -167,6 +225,7 @@ export const getReservationsByDate = async (req, res) => {
 
     const reservations = await CustomerRestaurant.findAll({
         where: {
+            is_deleted: false,
             reservation_date: {
                 [Op.between]: [startOfDay, endOfDay],
             },
@@ -174,4 +233,76 @@ export const getReservationsByDate = async (req, res) => {
     });
 
     res.status(200).json({ reservations });
+};
+
+export const getAllRestaurantReservations = async (req, res) => {
+    const lang = getLanguage(req);
+    const {
+        rest_id,
+        status,
+        payed,
+        reservation_date,
+        start_time,
+        end_time,
+        limit = 10,
+        page = 1,
+    } = req.query;
+
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const whereCondition = {};
+    whereCondition.is_deleted = false;
+
+    if (rest_id) {
+        whereCondition.rest_id = rest_id;
+    }
+
+    if (status) {
+        whereCondition.status = status;
+    }
+
+    if (payed !== undefined) {
+        whereCondition.payed = payed === "true";
+    }
+
+    // الفلترة بالتاريخ الكامل أو حسب يوم واحد
+    if (start_time && end_time) {
+        whereCondition.reservation_date = {
+            [Op.between]: [new Date(start_time), new Date(end_time)],
+        };
+    } else if (reservation_date) {
+        const date = new Date(reservation_date);
+        const startOfDay = new Date(date.setHours(0, 0, 0, 0));
+        const endOfDay = new Date(date.setHours(23, 59, 59, 999));
+        whereCondition.reservation_date = {
+            [Op.between]: [startOfDay, endOfDay],
+        };
+    }
+
+    const reservations = await CustomerRestaurant.findAndCountAll({
+        where: whereCondition,
+        limit: parseInt(limit),
+        offset,
+        order: [["reservation_date", "ASC"]],
+        include: [
+            {
+                model: Restaurant,
+                attributes: ["id", "name"]
+            },
+            {
+                model: Customer,
+                attributes: ["id", "first_name", "last_name"]
+            }
+        ]
+    });
+
+    if (!reservations.rows.length) {
+        return res.status(404).json({ message: getMessage("noReservationsFound", lang) });
+    }
+
+    return res.status(200).json({
+        total: reservations.count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        data: reservations.rows
+    });
 };

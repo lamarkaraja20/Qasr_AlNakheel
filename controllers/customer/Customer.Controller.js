@@ -1,14 +1,9 @@
 import { createRequire } from "module";
+import { Op } from "sequelize";
 const require = createRequire(import.meta.url);
 
 const bcrypt = require('bcryptjs');
-const fs = require("fs");
-import { fileURLToPath } from "url";
-
-const path = require("path");
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { deleteImageFromCloudinary } from "../../config/helpers/cloudinary.mjs";
 
 
 const Customer = require("../../models/Customer.model");
@@ -18,6 +13,7 @@ const Contact = require("../../models/Contact.model");
 const Rating = require("../../models/Rating.model");
 const CustomerPool = require("../../models/CustomerPool.model");
 const HallReservation = require("../../models/HallReservation.model");
+const CustomerRestaurant = require("../../models/CustomerRestaurant.model");
 
 const { getMessage } = require("../language/messages");
 
@@ -27,7 +23,24 @@ export const getCustomerById = async (req, res) => {
     const lang = getLanguage(req);
     const { id } = req.params;
     const customer = await Customer.findOne({
-        where: { id },
+        where: { id: id, is_deleted: false },
+        attributes: [
+            "id",
+            "first_name",
+            "second_name",
+            "third_name",
+            "last_name",
+            "gender",
+            "profession",
+            "free_text",
+            "email",
+            "country",
+            "city",
+            "postal_code",
+            "birthdate",
+            "profile_picture",
+            "banned"
+        ],
         include: [
             { model: Booking },
             { model: CustomerMobile },
@@ -35,6 +48,7 @@ export const getCustomerById = async (req, res) => {
             { model: Rating },
             { model: CustomerPool },
             { model: HallReservation },
+            { model: CustomerRestaurant }
         ]
 
     });
@@ -45,46 +59,129 @@ export const getCustomerById = async (req, res) => {
 }
 
 export const getAllCustomers = async (req, res) => {
-    const lang = getLanguage(req);
-    const customers = await Customer.findAll({
-        include: [
-            { model: CustomerMobile },
-        ]
-    });
-    if (!customers) {
-        return res.status(404).json({ message: getMessage("customersNotFound", lang) });
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const {
+        search = '',
+        is_verified,
+        country,
+        city
+    } = req.query;
+
+    const whereClause = {};
+
+    // Search by name or email
+    if (search) {
+        whereClause[Op.or] = [
+            { first_name: { [Op.iLike]: `%${search}%` } },
+            { last_name: { [Op.iLike]: `%${search}%` } },
+            { email: { [Op.iLike]: `%${search}%` } },
+        ];
     }
-    res.status(200).json(customers);
+
+    // Filters
+    if (is_verified) {
+        whereClause.is_verified = is_verified === 'true';
+    }
+
+    if (country) {
+        whereClause.country = { [Op.iLike]: `%${country}%` };
+    }
+
+    if (city) {
+        whereClause.city = { [Op.iLike]: `%${city}%` };
+    }
+    const { rows, count } = await Customer.findAndCountAll({
+        where: whereClause,
+        include: [
+            { model: CustomerMobile }
+        ],
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+    });
+
+    res.status(200).json({
+        data: rows,
+        total: count,
+        currentPage: page,
+        totalPages: Math.ceil(count / limit),
+    });
 }
 
 export const updateCustomerProfile = async (req, res) => {
     const lang = getLanguage(req);
     const { id } = req.params;
-    const { first_name, last_name, country, city, postal_code, birthdate } = req.body;
-    const profile_picture = req.file ? req.file.filename : null;
+    const {
+        first_name,
+        second_name,
+        third_name,
+        last_name,
+        country,
+        city,
+        postal_code,
+        birthdate,
+        gender,
+        profession,
+        free_text
+    } = req.body;
+
+    const newProfilePicture = req.file ? req.file.path : null;
 
     const customer = await Customer.findByPk(id);
     if (!customer) {
         return res.status(404).json({ message: getMessage("userNotFound", lang) });
     }
 
-    const imagePath = path.join(__dirname, "../../uploads/profilePictures", customer.profile_picture);
-    if (fs.existsSync(imagePath)) {
-        fs.unlinkSync(imagePath);
+    if (newProfilePicture) {
+        if (customer.profile_picture) {
+            await deleteImageFromCloudinary(customer.profile_picture);
+        }
+        customer.profile_picture = newProfilePicture;
     }
 
     await customer.update({
         first_name: first_name || customer.first_name,
+        second_name: second_name || customer.second_name,
+        third_name: third_name || customer.third_name,
         last_name: last_name || customer.last_name,
         country: country || customer.country,
         city: city || customer.city,
         postal_code: postal_code || customer.postal_code,
         birthdate: birthdate || customer.birthdate,
-        profile_picture: profile_picture || customer.profile_picture,
+        gender: gender || customer.gender,
+        profession: profession || customer.profession,
+        free_text: free_text || customer.free_text,
+        profile_picture: customer.profile_picture,
     });
 
     res.status(200).json({ message: getMessage("profileUpdated", lang), user: customer });
 };
+
+export const banUser = async (req, res) => {
+    const lang = getLanguage(req);
+    const { id } = req.params;
+    const customer = await Customer.findByPk(id);
+    if (!customer) {
+        return res.status(404).json({ message: getMessage("userNotFound", lang) });
+    }
+    const newStatus = !customer.banned;
+    await customer.update({ banned: newStatus });
+
+    const actionMessage = newStatus
+        ? getMessage("userBanned", lang)
+        : getMessage("userUnbanned", lang);
+
+    res.status(200).json({
+        message: actionMessage,
+        user: {
+            id: customer.id,
+            banned: newStatus,
+        }
+    });
+}
 
 export const changePassword = async (req, res) => {
     const lang = getLanguage(req);
@@ -213,6 +310,11 @@ export const deleteCustomer = async (req, res) => {
         return res.status(404).json({ message: getMessage("customerNotFound", lang) });
     }
 
-    await Customer.destroy({ where: { id } });
+    if (customer.profile_picture) {
+        await deleteImageFromCloudinary(customer.profile_picture);
+    }
+
+    customer.is_deleted = true;
+    await customer.save();
     res.status(204).json({ message: getMessage("customerDeleted", lang) });
 }

@@ -3,10 +3,6 @@ import { createRequire } from "module";
 import { Op } from "sequelize";
 const require = createRequire(import.meta.url);
 
-//require('dotenv').config();
-//import Stripe from 'stripe';
-//const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
 const { getMessage } = require('../language/messages');
 
 const Booking = require("../../models/Booking.model");
@@ -19,13 +15,14 @@ const Hall = require("../../models/Hall.model");
 const Restaurant = require("../../models/Restaurant.model");
 const Room = require("../../models/Room.model");
 const Pool = require("../../models/Pool.model")
+const { sendPaymentEmail } = require("../../utils/sendPaymentEmail")
 
 const getLanguage = (req) => (req.headers["accept-language"] === "ar" ? "ar" : "en");
 
 export const getUnpaidOrPaidInvoices = async (req, res) => {
     const lang = getLanguage(req);
     const cust_id = req.params.id;
-    const payed = req.query.payed || false;
+    const payed = req.query.payed === "true";
     if (!cust_id) {
         return res.status(400).json({ message: getMessage("customerNotFound", lang) });
     }
@@ -67,6 +64,7 @@ export const getUnpaidOrPaidInvoices = async (req, res) => {
             invoice_type: "CustomerPool",
             amount: Number(pool.total_price),
             details: {
+                pool: pool.Pool,
                 pool_id: pool.pool_id,
                 reservation_time: pool.reservation_time,
                 start_time: pool.start_time,
@@ -111,6 +109,305 @@ export const getUnpaidOrPaidInvoices = async (req, res) => {
     }
 
     res.status(200).json({ unpaidInvoices });
+};
+
+export const getUnpaidOrPaidInvoicesForAll = async (req, res) => {
+    const lang = getLanguage(req);
+    const payed = req.query.payed === "true";
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const [bookings, pools, restaurants, halls] = await Promise.all([
+        Booking.findAll({
+            where: { payed },
+            include: [{ model: Room }]
+        }),
+        CustomerPool.findAll({
+            where: { payed },
+            include: [{ model: Pool }]
+        }),
+        CustomerRestaurant.findAll({
+            where: { payed },
+            include: [{ model: Restaurant }]
+        }),
+        HallReservation.findAll({
+            where: { payed },
+            include: [{ model: Hall }]
+        })
+    ]);
+
+    const unpaidInvoices = [
+        ...bookings.map(booking => ({
+            invoice_id: booking.id,
+            customerId: booking.cust_id,
+            invoice_type: "Booking",
+            amount: Number(booking.total_price),
+            details: {
+                room: booking.Room,
+                num_of_guests: booking.num_of_guests,
+                check_in_date: booking.check_in_date,
+                check_out_date: booking.check_out_date,
+                status: booking.status
+            }
+        })),
+        ...pools.map(pool => ({
+            invoice_id: pool.id,
+            customerId: pool.customer_id,
+            invoice_type: "CustomerPool",
+            amount: Number(pool.total_price),
+            details: {
+                pool: pool.Pool,
+                pool_id: pool.pool_id,
+                reservation_time: pool.reservation_time,
+                start_time: pool.start_time,
+                end_time: pool.end_time,
+                duration: pool.duration,
+                num_guests: pool.num_guests,
+                status: pool.status,
+                notes: pool.notes
+            }
+        })),
+        ...restaurants.map(restaurant => ({
+            invoice_id: restaurant.id,
+            customerId: restaurant.cust_id,
+            invoice_type: "CustomerRestaurant",
+            amount: Number(restaurant.total_price),
+            details: {
+                restaurant: restaurant.Restaurant,
+                reservation_date: restaurant.reservation_date,
+                number_of_guests: restaurant.number_of_guests,
+                is_walk_in: restaurant.is_walk_in,
+                status: restaurant.status
+            }
+        })),
+        ...halls.map(hall => ({
+            invoice_id: hall.id,
+            customerId: hall.cust_id,
+            invoice_type: "HallReservation",
+            amount: Number(hall.total_price),
+            details: {
+                hall: hall.Hall,
+                start_time: hall.start_time,
+                end_time: hall.end_time,
+                status: hall.status
+            }
+        }))
+    ];
+
+    // Sort by newest first (optional)
+    unpaidInvoices.sort((a, b) => b.invoice_id - a.invoice_id);
+
+    const total = unpaidInvoices.length;
+    const paginatedInvoices = unpaidInvoices.slice(offset, offset + limit);
+
+    if (paginatedInvoices.length === 0) {
+        if (payed === false) {
+            return res.status(404).json({ message: getMessage("noUnpaidInvoices", lang) });
+        } else {
+            return res.status(200).json({ message: getMessage("noPaidInvoices", lang) });
+        }
+    }
+
+    res.status(200).json({
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        invoices: paginatedInvoices
+    });
+};
+
+export const getUnpaidOrPaidInvoicesForhalls = async (req, res) => {
+    const lang = getLanguage(req);
+    const payed = req.query.payed === "true";
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const halls = await HallReservation.findAll({
+        where: { payed },
+        include: [{ model: Hall }]
+    });
+
+    const unpaidInvoices = halls.map(hall => ({
+        invoice_id: hall.id,
+        customerId: hall.cust_id,
+        invoice_type: "HallReservation",
+        amount: Number(hall.total_price),
+        details: {
+            hall: hall.Hall,
+            start_time: hall.start_time,
+            end_time: hall.end_time,
+            status: hall.status
+        }
+    }));
+
+    const total = unpaidInvoices.length;
+    const paginatedInvoices = unpaidInvoices.slice(offset, offset + limit);
+
+    if (paginatedInvoices.length === 0) {
+        if (payed === false) {
+            return res.status(404).json({ message: getMessage("noUnpaidInvoices", lang) });
+        } else {
+            return res.status(200).json({ message: getMessage("noPaidInvoices", lang) });
+        }
+    }
+
+    res.status(200).json({
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        invoices: paginatedInvoices
+    });
+};
+
+export const getUnpaidOrPaidInvoicesForrestaurants = async (req, res) => {
+    const lang = getLanguage(req);
+    const payed = req.query.payed === "true";
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const restaurants = await CustomerRestaurant.findAll({
+        where: { payed },
+        include: [{ model: Restaurant }]
+    });
+
+    const unpaidInvoices = restaurants.map(restaurant => ({
+        invoice_id: restaurant.id,
+        customerId: restaurant.cust_id,
+        invoice_type: "CustomerRestaurant",
+        amount: Number(restaurant.total_price),
+        details: {
+            restaurant: restaurant.Restaurant,
+            reservation_date: restaurant.reservation_date,
+            number_of_guests: restaurant.number_of_guests,
+            is_walk_in: restaurant.is_walk_in,
+            status: restaurant.status
+        }
+    }));
+
+    const total = unpaidInvoices.length;
+    const paginatedInvoices = unpaidInvoices.slice(offset, offset + limit);
+
+    if (paginatedInvoices.length === 0) {
+        if (payed === false) {
+            return res.status(404).json({ message: getMessage("noUnpaidInvoices", lang) });
+        } else {
+            return res.status(200).json({ message: getMessage("noPaidInvoices", lang) });
+        }
+    }
+
+    res.status(200).json({
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        invoices: paginatedInvoices
+    });
+};
+
+export const getUnpaidOrPaidInvoicesForpools = async (req, res) => {
+    const lang = getLanguage(req);
+    const payed = req.query.payed === "true";
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const pools = await CustomerPool.findAll({
+        where: { payed },
+        include: [{ model: Pool }]
+    });
+
+    const unpaidInvoices = pools.map(pool => ({
+        invoice_id: pool.id,
+        customerId: pool.customer_id,
+        invoice_type: "CustomerPool",
+        amount: Number(pool.total_price),
+        details: {
+            pool: pool.Pool,
+            pool_id: pool.pool_id,
+            reservation_time: pool.reservation_time,
+            start_time: pool.start_time,
+            end_time: pool.end_time,
+            duration: pool.duration,
+            num_guests: pool.num_guests,
+            status: pool.status,
+            notes: pool.notes
+        }
+    }));
+
+    const total = unpaidInvoices.length;
+    const paginatedInvoices = unpaidInvoices.slice(offset, offset + limit);
+
+    if (paginatedInvoices.length === 0) {
+        if (payed === false) {
+            return res.status(404).json({ message: getMessage("noUnpaidInvoices", lang) });
+        } else {
+            return res.status(200).json({ message: getMessage("noPaidInvoices", lang) });
+        }
+    }
+
+    res.status(200).json({
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        invoices: paginatedInvoices
+    });
+};
+
+export const getUnpaidOrPaidInvoicesForbookings = async (req, res) => {
+    const lang = getLanguage(req);
+    const payed = req.query.payed === "true";
+
+    const limit = parseInt(req.query.limit) || 10;
+    const page = parseInt(req.query.page) || 1;
+    const offset = (page - 1) * limit;
+
+    const bookings = await Booking.findAll({
+        where: { payed },
+        include: [{ model: Room }]
+    });
+
+    const unpaidInvoices = bookings.map(booking => ({
+        invoice_id: booking.id,
+        customerId: booking.cust_id,
+        invoice_type: "Booking",
+        amount: Number(booking.total_price),
+        details: {
+            room: booking.Room,
+            num_of_guests: booking.num_of_guests,
+            check_in_date: booking.check_in_date,
+            check_out_date: booking.check_out_date,
+            status: booking.status
+        }
+    }));
+
+    const total = unpaidInvoices.length;
+    const paginatedInvoices = unpaidInvoices.slice(offset, offset + limit);
+
+    if (paginatedInvoices.length === 0) {
+        if (payed === false) {
+            return res.status(404).json({ message: getMessage("noUnpaidInvoices", lang) });
+        } else {
+            return res.status(200).json({ message: getMessage("noPaidInvoices", lang) });
+        }
+    }
+
+    res.status(200).json({
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+        invoices: paginatedInvoices
+    });
 };
 
 export const checkout = async (req, res) => {
@@ -204,113 +501,16 @@ export const payInvoices = async (req, res) => {
             invoice_type
         });
     }
-
+    await sendPaymentEmail(customer, {
+        payment_method,
+        total_amount: totalPaymentAmount,
+        invoice_list: invoices
+    }, lang);
     res.status(200).json({
         message: getMessage("paymentSuccess", lang),
         totalPaid: totalPaymentAmount
     });
 };
-/*
-export const payInvoices = async (req, res) => {
-    const lang = getLanguage(req);
-    const { cust_id, invoices, payment_method, token } = req.body;
-
-    if (!cust_id || !Array.isArray(invoices) || invoices.length === 0 || !token) {
-        return res.status(400).json({ message: getMessage("invalidData", lang) });
-    }
-
-    const customer = await Customer.findByPk(cust_id);
-    if (!customer) {
-        return res.status(404).json({ message: getMessage("customerNotFound", lang) });
-    }
-
-    let totalPaymentAmount = 0;
-
-    for (const invoice of invoices) {
-        const { invoice_id, invoice_type, amount } = invoice;
-        const numericAmount = Number(amount);
-
-        if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
-            return res.status(400).json({ message: getMessage("invalidAmount", lang) });
-        }
-
-        totalPaymentAmount += numericAmount;
-
-        let invoiceRecord;
-        switch (invoice_type) {
-            case "Booking":
-                invoiceRecord = await Booking.findOne({ where: { id: invoice_id, cust_id } });
-                break;
-            case "CustomerPool":
-                invoiceRecord = await CustomerPool.findOne({ where: { id: invoice_id, customer_id: cust_id } });
-                break;
-            case "CustomerRestaurant":
-                invoiceRecord = await CustomerRestaurant.findOne({ where: { id: invoice_id, cust_id } });
-                break;
-            case "HallReservation":
-                invoiceRecord = await HallReservation.findOne({ where: { id: invoice_id, cust_id } });
-                break;
-            default:
-                return res.status(400).json({ message: getMessage("invalidInvoiceType", lang) });
-        }
-
-        if (!invoiceRecord) {
-            return res.status(404).json({ message: getMessage("invoiceNotFound", lang) });
-        }
-
-        if (invoiceRecord.payed) {
-            return res.status(400).json({ message: getMessage("invoiceAlreadyPaid", lang) });
-        }
-    }
-
-    try {
-        // معالجة الدفع عبر Stripe
-        const charge = await stripe.charges.create({
-            amount: Math.round(totalPaymentAmount * 100), // تحويل القيمة إلى سنتات
-            currency: 'usd',
-            source: token,
-            description: 'Payment for Multiple Invoices',
-        });
-
-        // تحديث حالة الفواتير بعد نجاح الدفع
-        for (const invoice of invoices) {
-            const { invoice_id, invoice_type } = invoice;
-
-            switch (invoice_type) {
-                case "Booking":
-                    await Booking.update({ payed: true }, { where: { id: invoice_id, cust_id } });
-                    break;
-                case "CustomerPool":
-                    await CustomerPool.update({ payed: true }, { where: { id: invoice_id, customer_id: cust_id } });
-                    break;
-                case "CustomerRestaurant":
-                    await CustomerRestaurant.update({ payed: true }, { where: { id: invoice_id, cust_id } });
-                    break;
-                case "HallReservation":
-                    await HallReservation.update({ payed: true }, { where: { id: invoice_id, cust_id } });
-                    break;
-            }
-
-            // حفظ معلومات الدفع في قاعدة البيانات
-            await Payment.create({
-                cust_id,
-                payment_amount: totalPaymentAmount,
-                payment_method,
-                invoice_id,
-                invoice_type
-            });
-        }
-
-        res.status(200).json({
-            message: getMessage("paymentSuccess", lang),
-            totalPaid: totalPaymentAmount,
-            charge
-        });
-    } catch (error) {
-        res.status(500).json({ message: getMessage("paymentFailed", lang), error: error.message });
-    }
-};
-*/
 
 export const getTotalUnpaidInvoiceAmount = async (req, res) => {
     const lang = getLanguage(req);

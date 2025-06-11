@@ -16,21 +16,21 @@ export const logIn = async (req, res) => {
     const lang = getLanguage(req);
     const { email, password } = req.body;
 
-    const user = await Employee.findOne({ where: { email }, include: { model: EmployeeMobile, attributes: ["mobile_no"] } });
+    const user = await Employee.findOne({ where: { email, is_deleted: false }, include: { model: EmployeeMobile, attributes: ["mobile_no"] } });
     if (!user) return res.status(400).json({ message: getMessage("employeeNotFound", lang) });
 
+    if (user.is_deleted) return res.status(400).json({ message: getMessage("employeeDeleted", lang) });
     const mobileNos = user.EmployeeMobiles.map(mobile => mobile.mobile_no);
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: getMessage("wrongPassword", lang) });
-    console.log(process.env.JWT_ACCESS_SECRET)
     const accessToken = jwt.sign({
-            id: user.id,
-            role: user.role,
-            is_verified: user.is_verified
-        },process.env.JWT_ACCESS_SECRET,{
-            expiresIn: '24h'
-        });
+        id: user.id,
+        role: user.role,
+        is_verified: user.is_verified
+    }, process.env.JWT_ACCESS_SECRET, {
+        expiresIn: '24h'
+    });
 
     res.cookie("QasrAlNakheel", accessToken, {
         httpOnly: true,
@@ -44,7 +44,8 @@ export const logIn = async (req, res) => {
         message: getMessage("employeeLogedIn", lang),
         user: {
             id: user.id,
-            name: user.name,
+            first_name: user.first_name,
+            last_name: user.last_name,
             email: user.email,
             address: user.address,
             jop_description: user.jop_description,

@@ -1,37 +1,40 @@
 const express = require('express');
-const { addFacility, createHall, getHalls, getHallById, updateHall, addhallImage, updateMainImage, updateFacility, deleteFacility, deleteHallImage, deleteHall } = require('./Hall.Controller');
+const { addFacility, createHall, getHalls, getHallById, updateHall, addhallImage, updateMainImage, updateFacility, deleteFacility, deleteHallImage, deleteHall, getHallsNotAllData } = require('./Hall.Controller');
 const { uploadFacilityImages, uploadHallImages, addHallImage } = require('../../config/multerConfig');
 const router = express.Router();
 
 const multer = require("multer");
-const { createHallReservation, getCustomerReservations, cancelReservation, acceptReservation, getReservationsByHall, getReservationsByDate, getAllReservations, deleteReservation, getFutureReservations } = require('./HallReservation.Controller');
+const { createHallReservation, cancelReservation, acceptReservation, getReservationsByHall, getReservationsByDate, getAllReservations, deleteReservation, getFutureReservations, getReservationsByHallAndDate, getCustomerHallReservations } = require('./HallReservation.Controller');
+const { verifyTokenAdmin, verifyTokenAdminOrReceptionist, verifyTokenUserVerified, verifyAnyoneHasAccount } = require('../../middleware/verifyToken');
 const upload = multer();
 
-router.post("/", uploadHallImages, createHall)
-router.post('/addHallImage/:id', addHallImage, addhallImage)
-router.post("/addFacility/:id", uploadFacilityImages, addFacility)
+router.post("/", verifyTokenAdmin, uploadHallImages, createHall)
+router.post('/addHallImage/:id', verifyTokenAdmin, addHallImage, addhallImage)
+router.post("/addFacility/:id", verifyTokenAdmin, uploadFacilityImages, addFacility)
 
 //Hall Reservation
-router.post("/hallReservation/:id", upload.none(), createHallReservation)
-router.get("/hallReservations", getAllReservations)
-router.get("/customerHallReservation/:id", getCustomerReservations)
-router.get("/hallReservationByHall/:id", getReservationsByHall)
-router.get("/getReservationInDay/:date", getReservationsByDate)
-router.get("/futureReservations", getFutureReservations)
-router.patch("/cancelHallReservation/:id", cancelReservation)
-router.patch("/acceptHallReservation/:id", acceptReservation)
-router.delete("/deleteReservation/:id", deleteReservation)
+router.post("/hallReservation/:id", verifyTokenUserVerified, upload.none(), createHallReservation)
+router.get("/hallReservations", verifyTokenAdminOrReceptionist, getAllReservations)
+router.get("/customerHallReservation/:id", verifyAnyoneHasAccount, getCustomerHallReservations)
+router.get("/hallReservationByHall/:id", verifyTokenAdminOrReceptionist, getReservationsByHall)
+router.get("/getReservationInDay/:date", verifyAnyoneHasAccount, getReservationsByDate)
+router.get("/futureReservations", verifyAnyoneHasAccount, getFutureReservations)
+router.get("/get/getReservationsByHallAndDate/:id", verifyAnyoneHasAccount, getReservationsByHallAndDate)
+router.patch("/cancelHallReservation/:id", verifyAnyoneHasAccount, cancelReservation)
+router.patch("/acceptHallReservation/:id", verifyTokenAdminOrReceptionist, acceptReservation)
+router.delete("/deleteReservation/:id", verifyAnyoneHasAccount, deleteReservation)
 //
 
 router.get('/', getHalls)
+router.get('/get/hallsNameAndId', getHallsNotAllData)
 router.get('/:id', getHallById)
 
-router.put('/:id', upload.none(), updateHall)
-router.put('/updateFacility/:id', uploadFacilityImages, updateFacility)
-router.patch('/updateMainImage/:id', addHallImage, updateMainImage)
+router.put('/:id', verifyTokenAdmin, upload.none(), updateHall)
+router.put('/updateFacility/:id', verifyTokenAdmin, uploadFacilityImages, updateFacility)
+router.patch('/updateMainImage/:id', verifyTokenAdmin, addHallImage, updateMainImage)
 
-router.delete('/deleteFacility/:id', deleteFacility)
-router.delete('/deleteHallImage/:id', deleteHallImage)
-router.delete('/:id', deleteHall)
+router.delete('/deleteFacility/:id', verifyTokenAdmin, deleteFacility)
+router.delete('/deleteHallImage/:id', verifyTokenAdmin, deleteHallImage)
+router.delete('/:id', verifyTokenAdmin, deleteHall)
 
 module.exports = router;
