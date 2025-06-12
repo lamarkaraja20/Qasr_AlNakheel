@@ -62,7 +62,7 @@ passport.deserializeUser(async (id, done) => {
     }
 });
 
-
+router.get("/google", passport.authenticate("google", { scope: ["profile", "email"] }));
 router.get("/google/callback", passport.authenticate("google", { failureRedirect: `${process.env.FRONTEND_URL}/login` }), async (req, res) => {
     if (!req.user) {
         return res.redirect(`${process.env.FRONTEND_URL}/login` || "http://localhost:5173/login");

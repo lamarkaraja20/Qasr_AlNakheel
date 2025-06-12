@@ -53,6 +53,7 @@ passport.deserializeUser(async (id, done) => {
         done(error, null);
     }
 });
+router.get("/facebook", passport.authenticate("facebook", { scope: ["email"] }));
 
 router.get("/facebook/callback", passport.authenticate("facebook", { failureRedirect: `${process.env.FRONTEND_URL}/login` }), async (req, res) => {
     if (!req.user) {
